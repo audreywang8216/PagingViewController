@@ -8,7 +8,7 @@
 import UIKit
 
 protocol PagingContainerViewDelegate: AnyObject {
-    func scrollViewDidScroll(_ scrollView: UIScrollView)
+    func pagingContainerView(scrollViewDidScroll scrollView: UIScrollView)
     
     func pagingContainerView(_ scrollView: UIScrollView, willBeginDragging atIndex: Int)
     
@@ -41,11 +41,16 @@ class PagingContainerView: UIView {
     
     private lazy var collectionView: UICollectionView = {
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.isDirectionalLockEnabled = true
         collectionView.showsVerticalScrollIndicator = false
         collectionView.showsHorizontalScrollIndicator = false
         collectionView.isPagingEnabled = true
         return collectionView
     }()
+    
+    var panGestureRecognizer: UIPanGestureRecognizer {
+        return collectionView.panGestureRecognizer
+    }
     
     weak var delegate: PagingContainerViewDelegate? = nil
     
@@ -68,7 +73,7 @@ class PagingContainerView: UIView {
     }
     
     private func setupUI() {
-        collectionView.backgroundColor = .blue
+        collectionView.backgroundColor = .white
         addSubview(collectionView)
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -79,9 +84,14 @@ class PagingContainerView: UIView {
         ])
     }
     
+    func setScrollingEnabled(_ isEnabled: Bool) {
+        collectionView.isScrollEnabled = isEnabled
+    }
+    
     func selected(at index: Int) {
         collectionView.selectItem(at: IndexPath(item: index, section: 0), animated: true, scrollPosition: .centeredHorizontally)
     }
+    
 }
 
 extension PagingContainerView: UICollectionViewDataSource {
@@ -113,7 +123,7 @@ extension PagingContainerView: UIScrollViewDelegate {
     }
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        delegate?.scrollViewDidScroll(scrollView)
+        delegate?.pagingContainerView(scrollViewDidScroll: scrollView)
     }
     
     func scrollViewWillBeginDecelerating(_ scrollView: UIScrollView) {

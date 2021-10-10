@@ -7,11 +7,13 @@
 
 import UIKit
 
-class ContentListViewController: UIViewController {
+class ContentListViewController: UIViewController, PagingContainerListProtocol {
     
-    private lazy var tableView: UITableView = {
-        return UITableView()
+    lazy var tableView: TableView = {
+        return TableView()
     }()
+    
+    weak var delegate: PagingContainerListDelegate? = nil
     
     let index: Int
     
@@ -32,9 +34,11 @@ class ContentListViewController: UIViewController {
         setupUI()
     }
     
+    
     private func initTableView() {
         tableView.delegate = self
         tableView.dataSource = self
+        tableView.gestureDelegate = self
         tableView.register(ContentTableViewCell.self, forCellReuseIdentifier: ContentTableViewCell.reuseIdentifier())
     }
     
@@ -68,6 +72,26 @@ extension ContentListViewController: UITableViewDataSource {
         cell.configure(titleText: data.name, imageName: data.imageName, contentText: data.description)
         return cell
     }
+}
+
+extension ContentListViewController: UIScrollViewDelegate {
     
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        delegate?.scrollViewDidScroll(tableView)
+    }
     
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        delegate?.willBeginDragging(tableView)
+    }
+    
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        delegate?.didEndScrolling(tableView)
+    }
+}
+
+extension ContentListViewController: TableViewGestureRecognizerDelegate {
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return delegate?.gestureRecognizer(gestureRecognizer, shouldRecognizeSimultaneouslyWith: otherGestureRecognizer) ?? true
+    }
 }

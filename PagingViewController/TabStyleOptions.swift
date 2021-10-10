@@ -11,8 +11,6 @@ struct TabStyleOptions {
     
     var tabViewHeight: CGFloat = 38
     
-    var hasFixedView: Bool = true
-    
     var fixViewHeight: CGFloat = 38
     
     var leftSpacing: CGFloat = 16
