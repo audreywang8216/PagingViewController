@@ -22,7 +22,7 @@ class ViewController: UIViewController {
     }()
     
     private lazy var headerPagingVC: HeaderPagingViewController = {
-        return HeaderPagingViewController(subViewController: subViewController)
+        return HeaderPagingViewController(subViewController: subViewController, isTabViewPinned: true)
     }()
 
     override func viewDidLoad() {

@@ -26,7 +26,7 @@ class HeaderPagingViewController: UIViewController {
     
     /// 底層tableView
     private lazy var mainTableView: UITableView = {
-        let tableView = UITableView()
+        let tableView = UITableView(frame: .zero, style: tableViewStyle)
         tableView.showsVerticalScrollIndicator = false
         return tableView
     }()
@@ -53,6 +53,22 @@ class HeaderPagingViewController: UIViewController {
     
     /// 子ViewController列表
     private let subViewController: [PagingContainerListProtocol]
+    
+    private let isTabViewPinned: Bool
+    
+    private var criticalHeight: CGFloat {
+        if isTabViewPinned {
+            return headerViewHeight
+        }
+        return headerViewHeight + options.fixViewHeight
+    }
+    
+    private var tableViewStyle: UITableView.Style {
+        if isTabViewPinned {
+            return .plain
+        }
+        return .grouped
+    }
     
     private let listTableViewObserverKeyPath = "contentOffset"
     
@@ -87,7 +103,8 @@ class HeaderPagingViewController: UIViewController {
     
     // MARK: - life cycle
     
-    init(subViewController: [PagingContainerListProtocol]) {
+    init(subViewController: [PagingContainerListProtocol], isTabViewPinned: Bool) {
+        self.isTabViewPinned = isTabViewPinned
         self.subViewController = subViewController
         super.init(nibName: nil, bundle: nil)
     }
@@ -163,11 +180,12 @@ class HeaderPagingViewController: UIViewController {
     private func endScrollingHandler(toIndex: Int) {
         resetIndex()
         isScrollingEnd = true
+        tabView.updateCell(fromIndex: selectedIndex, toIndex: toIndex, progress: 1.0)
         guard subViewController.indices.contains(toIndex),
-              subViewController.indices.contains(selectedIndex) else { return }
+              subViewController.indices.contains(selectedIndex),
+              toIndex != selectedIndex else { return }
         let toVC = subViewController[toIndex]
         let fromVC = subViewController[selectedIndex]
-        tabView.updateCell(fromIndex: selectedIndex, toIndex: toIndex, progress: 1.0)
         selectedIndex = toIndex
         // 呼叫fromVC的viewDidDisappear
         fromVC.endAppearanceTransition()
@@ -198,11 +216,11 @@ class HeaderPagingViewController: UIViewController {
         guard keyPath == listTableViewObserverKeyPath,
               let newOffset = change?[NSKeyValueChangeKey.newKey] as? CGPoint,
                  let oldOffset = change?[NSKeyValueChangeKey.oldKey] as? CGPoint else { return }
-        if newOffset.y < headerViewHeight,
-           oldOffset.y < headerViewHeight,
+        if newOffset.y < criticalHeight,
+           oldOffset.y < criticalHeight,
            isMainScrollingEnabled {
             listTableView?.contentOffset = .zero
-        } else if newOffset.y >= headerViewHeight {
+        } else if newOffset.y >= criticalHeight {
             isMainScrollingEnabled = false
         }
         
@@ -364,7 +382,7 @@ extension HeaderPagingViewController: UIScrollViewDelegate {
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         if !isMainScrollingEnabled {
-            scrollView.contentOffset = CGPoint(x: 0, y: headerViewHeight)
+            scrollView.contentOffset = CGPoint(x: 0, y: criticalHeight)
         }
     }
 }
@@ -374,7 +392,7 @@ extension HeaderPagingViewController: PagingContainerListDelegate {
     
     func scrollViewDidScroll(_ listTableView: UITableView) {
         if !isMainScrollingEnabled {
-            mainTableView.contentOffset = CGPoint(x: 0, y: headerViewHeight)
+            mainTableView.contentOffset = CGPoint(x: 0, y: criticalHeight)
         }
         if !isMainScrollingEnabled,
            listTableView.contentOffset.y <= 0 {
