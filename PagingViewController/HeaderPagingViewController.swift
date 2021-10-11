@@ -31,16 +31,6 @@ class HeaderPagingViewController: UIViewController {
         return tableView
     }()
     
-    /// 頁籤view
-    private lazy var tabView: PagingTabView = {
-        return PagingTabView(cellClass: TabCollectionViewCell.self, reuseIdentifier: TabCollectionViewCell.reuseIdentifier(), options: options)
-    }()
-    
-    /// 頁籤樣式
-    private lazy var options: TabStyleOptions = {
-        return TabStyleOptions()
-    }()
-    
     /// 跟隨頁籤滑動的containerView
     private lazy var containerView: PagingContainerView = {
         return PagingContainerView()
@@ -51,18 +41,29 @@ class HeaderPagingViewController: UIViewController {
         return subViewController.map { $0.title ?? ""}
     }
     
+    /// 頁籤view
+    private let tabView: PagingTabView
+    
+    /// 頁籤樣式
+    private var options: TabStyleOptions {
+        return tabView.options
+    }
+    
     /// 子ViewController列表
     private let subViewController: [PagingContainerListProtocol]
     
+    /// 頁籤在Header消失時是否固定在最頂端
     private let isTabViewPinned: Bool
     
+    /// Header顯示/消失的臨界值
     private var criticalHeight: CGFloat {
         if isTabViewPinned {
             return headerViewHeight
         }
-        return headerViewHeight + options.fixViewHeight
+        return headerViewHeight + options.tabViewHeight
     }
     
+    /// 底層TableView的樣式
     private var tableViewStyle: UITableView.Style {
         if isTabViewPinned {
             return .plain
@@ -70,18 +71,18 @@ class HeaderPagingViewController: UIViewController {
         return .grouped
     }
     
-    private let listTableViewObserverKeyPath = "contentOffset"
+    private let contentOffsetKeyPath = "contentOffset"
     
     /// 當前選擇index
     private var selectedIndex: Int = 0
     
+    /// 滑動中的列表
     private var listTableView: UIScrollView? = nil
     
-    private var isListScrollingEnabled: Bool = false
-    
+    /// 底層TableView是否可以滑動
     private var isMainScrollingEnabled: Bool = true
     
-    // Scroll過程參數
+    // MARK: - 頁籤切換過程參數
     
     /// 滑動前index
     private var fromIndex: Int? = nil
@@ -103,7 +104,8 @@ class HeaderPagingViewController: UIViewController {
     
     // MARK: - life cycle
     
-    init(subViewController: [PagingContainerListProtocol], isTabViewPinned: Bool) {
+    init(subViewController: [PagingContainerListProtocol], pagingTabView: PagingTabView, isTabViewPinned: Bool) {
+        self.tabView = pagingTabView
         self.isTabViewPinned = isTabViewPinned
         self.subViewController = subViewController
         super.init(nibName: nil, bundle: nil)
@@ -115,7 +117,7 @@ class HeaderPagingViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        setMainTableView()
+        setDelegateAndDataScource()
         setupUI()
     }
     
@@ -129,15 +131,27 @@ class HeaderPagingViewController: UIViewController {
         return false
     }
     
+    // MARK: - 設定UI
+    
     /// 設定底層MainTableView
-    private func setMainTableView() {
+    private func setDelegateAndDataScource() {
         mainTableView.delegate = self
         mainTableView.dataSource = self
         mainTableView.register(UITableViewCell.self, forCellReuseIdentifier: UITableViewCell.reuseIdentifier())
         mainTableView.separatorStyle = .none
         mainTableView.tableHeaderView = tableHeaderView
-        mainTableView.addObserver(self, forKeyPath: listTableViewObserverKeyPath, options: [.old, .new], context: nil)
+        mainTableView.addObserver(self, forKeyPath: contentOffsetKeyPath, options: [.new], context: nil)
         
+        tabView.dataSource = self
+        tabView.delegate = self
+        containerView.dataSource = self
+        containerView.delegate = self
+        subViewController.forEach{ $0.delegate = self }
+    }
+    
+    /// 設定UI
+    private func setupUI() {
+        view.backgroundColor = .white
         view.addSubview(mainTableView)
         mainTableView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -148,20 +162,9 @@ class HeaderPagingViewController: UIViewController {
         ])
     }
     
-    /// 設定UI
-    private func setupUI() {
-        view.backgroundColor = .white
-        tabView.dataSource = self
-        tabView.delegate = self
-        containerView.dataSource = self
-        containerView.delegate = self
-        subViewController.forEach{ $0.delegate = self }
-    }
-    
     /// 設定指示器跟頁籤初始位置跟樣式
     private func setTabViewInitStatus() {
-        tabView.initIndicator(selectedIndex: selectedIndex)
-        tabView.updateCell(fromIndex: selectedIndex, toIndex: selectedIndex, progress: 1.0)
+        tabView.configure(selectedIndex: selectedIndex)
         guard subViewController.indices.contains(selectedIndex) else { return }
         let vc = subViewController[selectedIndex]
         vc.beginAppearanceTransition(true, animated: false)
@@ -212,21 +215,20 @@ class HeaderPagingViewController: UIViewController {
         targetVC.beginAppearanceTransition(true, animated: false)
     }
     
+    /// 觀察mainTableView的contentOffset
     override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        guard keyPath == listTableViewObserverKeyPath,
-              let newOffset = change?[NSKeyValueChangeKey.newKey] as? CGPoint,
-                 let oldOffset = change?[NSKeyValueChangeKey.oldKey] as? CGPoint else { return }
+        guard keyPath == contentOffsetKeyPath,
+              let newOffset = change?[NSKeyValueChangeKey.newKey] as? CGPoint else { return }
         if newOffset.y < criticalHeight,
-           oldOffset.y < criticalHeight,
            isMainScrollingEnabled {
             listTableView?.contentOffset = .zero
         } else if newOffset.y >= criticalHeight {
             isMainScrollingEnabled = false
         }
-        
     }
 }
 
+// MARK: - PagingTabViewDelegate (點擊頁籤)
 extension HeaderPagingViewController: PagingTabViewDelegate {
     
     /// 點擊頁籤
@@ -238,6 +240,7 @@ extension HeaderPagingViewController: PagingTabViewDelegate {
     }
 }
 
+// MARK: - PagingTabViewDataSource (頁籤的dataSource)
 extension HeaderPagingViewController: PagingTabViewDataSource {
     
     func numberOfItems() -> Int {
@@ -246,20 +249,22 @@ extension HeaderPagingViewController: PagingTabViewDataSource {
     
     /// 指定頁籤的cell
     func pagingTabView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: TabCollectionViewCell.reuseIdentifier(), for: indexPath) as? TabCollectionViewCell,
+        guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: tabView.reuseIdentifier, for: indexPath) as? TabCellProtocol,
               tabListName.indices.contains(indexPath.row) else {
             return UICollectionViewCell()
         }
-        cell.configure(text: tabListName[indexPath.row])
+        let isSelected = indexPath.row == selectedIndex
+        cell.configure(text: tabListName[indexPath.row], options: options, isItemSelected: isSelected)
         return cell
     }
     
 }
 
+// MARK: - PagingContainerViewDelegate (左右滑動頁面相關)
 extension HeaderPagingViewController: PagingContainerViewDelegate {
     
+    /// 滑動快要停止
     func pagingContainerView(willBeginDecelerating scrollView: UIScrollView) {
-        // 滑動快要停止，呼叫fromVC的viewWillDisappear，targetVC的viewWillAppear，
         setSubViewControllerAppearance()
     }
     
@@ -320,6 +325,7 @@ extension HeaderPagingViewController: PagingContainerViewDelegate {
 
 }
 
+// MARK: - PagingContainerViewDataSource (頁面的dataSource)
 extension HeaderPagingViewController: PagingContainerViewDataSource {
     
     func pagingContainerView(cellContentView: UIView, cellForItemAt index: Int) {
@@ -341,11 +347,8 @@ extension HeaderPagingViewController: PagingContainerViewDataSource {
     
 }
 
-extension HeaderPagingViewController: UITableViewDelegate {
-    
-}
-
-extension HeaderPagingViewController: UITableViewDataSource {
+// MARK: - UITableViewDataSource, UITableViewDelegate (MainTableView相關)
+extension HeaderPagingViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return 1
@@ -402,13 +405,9 @@ extension HeaderPagingViewController: PagingContainerListDelegate {
     
     func willBeginDragging(_ listTableView: UITableView) {
         self.listTableView = listTableView
-        
     }
     
-    func didEndScrolling(_ listTableView: UITableView) {
-        
-    }
-    
+    /// 當左右滑動切換頁面時不要觸發列表上下滑動
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         if otherGestureRecognizer == containerView.panGestureRecognizer {
             return false

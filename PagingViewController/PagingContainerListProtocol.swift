@@ -18,6 +18,14 @@ protocol PagingContainerListDelegate: AnyObject {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool
 }
 
+extension PagingContainerListDelegate {
+    
+    func willBeginDragging(_ listTableView: UITableView) {}
+    
+    func didEndScrolling(_ listTableView: UITableView) {}
+    
+}
+
 protocol PagingContainerListProtocol: UIViewController {
     
     var delegate: PagingContainerListDelegate? { get set }

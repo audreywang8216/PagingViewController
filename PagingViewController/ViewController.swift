@@ -8,7 +8,7 @@
 import UIKit
 
 class ViewController: UIViewController {
-    
+
     private lazy var tabNameList: [String] = ["ETF", "投資快訊", "保險", "基金", "投資", "股市"]
     
     private lazy var subViewController: [PagingContainerListProtocol] = {
@@ -21,8 +21,17 @@ class ViewController: UIViewController {
         return list
     }()
     
+    private lazy var pagingTabView: PagingTabView = {
+        return PagingTabView(cellClass: RoundTabCell.self, reuseIdentifier: RoundTabCell.reuseIdentifier(), options: options)
+    }()
+    
     private lazy var headerPagingVC: HeaderPagingViewController = {
-        return HeaderPagingViewController(subViewController: subViewController, isTabViewPinned: true)
+        return HeaderPagingViewController(subViewController: subViewController, pagingTabView: pagingTabView, isTabViewPinned: true)
+    }()
+    
+    /// 頁籤樣式
+    private lazy var options: TabStyleOptions = {
+        return TabStyleOptions()
     }()
 
     override func viewDidLoad() {

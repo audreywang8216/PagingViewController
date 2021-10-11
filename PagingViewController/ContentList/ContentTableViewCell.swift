@@ -21,6 +21,7 @@ class ContentTableViewCell: UITableViewCell {
     private lazy var contentImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
+        imageView.clipsToBounds = true
         return imageView
     }()
     
@@ -61,7 +62,9 @@ class ContentTableViewCell: UITableViewCell {
             stackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             stackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             stackView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            stackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+            stackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+            titleLabel.heightAnchor.constraint(equalToConstant: 30),
+            contentImageView.heightAnchor.constraint(equalToConstant: 200)
         ])
     }
     

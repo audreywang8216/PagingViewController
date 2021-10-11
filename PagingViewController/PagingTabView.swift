@@ -25,9 +25,11 @@ class PagingTabView: UIView {
     
     weak var dataSource: PagingTabViewDataSource? = nil
     
+    private let screenWidth: CGFloat = UIScreen.main.bounds.width
+    
     private lazy var layout: UICollectionViewFlowLayout = {
         let layout = UICollectionViewFlowLayout()
-        layout.estimatedItemSize = CGSize(width: 50, height: 38)
+        layout.estimatedItemSize = CGSize(width: 50, height: options.tabViewHeight)
         layout.scrollDirection = .horizontal
         return layout
     }()
@@ -41,13 +43,25 @@ class PagingTabView: UIView {
     
     private lazy var indicatorView: UIView = {
         let view = UIView()
-        view.backgroundColor = .black
+        view.backgroundColor = options.indicatorColor
         return view
     }()
     
-    private let options: TabStyleOptions
+    private lazy var separateLine: UIView = {
+        let view = UIView()
+        view.backgroundColor = options.separateLineColor
+        return view
+    }()
+    
+    let options: TabStyleOptions
+    
+    let reuseIdentifier: String
+    
+    private let cellClass: AnyClass
     
     init(cellClass: AnyClass, reuseIdentifier: String, options: TabStyleOptions) {
+        self.cellClass = cellClass
+        self.reuseIdentifier = reuseIdentifier
         self.options = options
         super.init(frame: .zero)
         initCollectionView(cellClass: cellClass, reuseIdentifier: reuseIdentifier)
@@ -59,7 +73,7 @@ class PagingTabView: UIView {
     }
     
     private func initCollectionView(cellClass: AnyClass, reuseIdentifier: String) {
-        collectionView.backgroundColor = .red
+        collectionView.backgroundColor = options.tabViewBgColor
         collectionView.delegate = self
         collectionView.dataSource = self
         collectionView.register(cellClass, forCellWithReuseIdentifier: reuseIdentifier)
@@ -69,28 +83,67 @@ class PagingTabView: UIView {
         addSubview(collectionView)
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         
+        addSubview(separateLine)
+        separateLine.translatesAutoresizingMaskIntoConstraints = false
+        
         collectionView.addSubview(indicatorView)
+        
+        separateLine.isHidden = !options.hasSeparateLine
+        indicatorView.isHidden = !options.hasIndicator
         
         NSLayoutConstraint.activate([
             collectionView.leadingAnchor.constraint(equalTo: leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: trailingAnchor),
             collectionView.topAnchor.constraint(equalTo: topAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: bottomAnchor)
+            collectionView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            
+            separateLine.leadingAnchor.constraint(equalTo: leadingAnchor),
+            separateLine.trailingAnchor.constraint(equalTo: trailingAnchor),
+            separateLine.heightAnchor.constraint(equalToConstant: options.separateLineHeight),
+            separateLine.topAnchor.constraint(equalTo: bottomAnchor)
         ])
     }
     
-    func initIndicator(selectedIndex: Int) {
-        guard let cell = collectionView.cellForItem(at: IndexPath(item: selectedIndex, section: 0)) as? TabCollectionViewCell else { return }
-        indicatorView.frame = CGRect(x: cell.frame.minX, y: cell.frame.height - options.indicatorHeight, width: cell.frame.width, height: options.indicatorHeight)
+    private func getItemSize() -> CGSize {
+        switch options.itemSize {
+        case .fix(let width):
+            return CGSize(width: width, height: options.tabViewHeight)
+        case .average:
+            let count = dataSource?.numberOfItems() ?? 0
+            let spaceCount = max(count - 1, 0)
+            let totalWidth = screenWidth - options.leftSpacing - options.rightSpacing - options.itemSpacing * CGFloat(spaceCount)
+            let width: CGFloat = (count == 0) ? 0 : totalWidth / CGFloat(count)
+            return CGSize(width: width, height: options.tabViewHeight)
+        case .selfSize:
+            return layout.estimatedItemSize
+        }
     }
     
+    func configure(selectedIndex: Int) {
+        initIndicator(selectedIndex: selectedIndex)
+        updateCell(fromIndex: selectedIndex, toIndex: selectedIndex, progress: 1.0)
+        collectionView.reloadData()
+    }
+    
+    private func initIndicator(selectedIndex: Int) {
+        guard let cell = collectionView.cellForItem(at: IndexPath(item: selectedIndex, section: 0)) else { return }
+        let indicatorWidth = options.indicatorWidthRatio * cell.frame.width
+        let minX = cell.frame.minX + (cell.frame.width - indicatorWidth) / 2
+        indicatorView.frame = CGRect(x: minX, y: cell.frame.height - options.indicatorHeight, width: indicatorWidth, height: options.indicatorHeight)
+    }
+    
+    /// 更新指示器位置
     func updateIndicator(fromIndex: Int, toIndex: Int, progress: CGFloat, withAnimation: Bool = false) {
-        guard let fromCell = collectionView.cellForItem(at: IndexPath(item: fromIndex, section: 0)) as? TabCollectionViewCell,
-              let toCell = collectionView.cellForItem(at: IndexPath(item: toIndex, section: 0))as? TabCollectionViewCell else { return }
+        guard let fromCell = collectionView.cellForItem(at: IndexPath(item: fromIndex, section: 0)),
+              let toCell = collectionView.cellForItem(at: IndexPath(item: toIndex, section: 0)) else { return }
         let fromCellFrame = fromCell.frame
         let toCellFrame = toCell.frame
-        let currentX = fromCellFrame.minX + (toCellFrame.minX - fromCellFrame.minX) * progress
-        let currentWidth = fromCellFrame.width + (toCellFrame.width - fromCellFrame.width) * progress
+        let fromWidth = options.indicatorWidthRatio * fromCellFrame.width
+        let fromMinX = fromCellFrame.minX + (fromCellFrame.width - fromWidth) / 2
+        let toWidth = options.indicatorWidthRatio * toCellFrame.width
+        let toMinX = toCellFrame.minX + (toCellFrame.width - toWidth) / 2
+        let currentX = fromMinX + (toMinX - fromMinX) * progress
+        let currentWidth = fromWidth + (toWidth - fromWidth) * progress
         let duration: TimeInterval = withAnimation ? 0.2 : 0.0
         UIView.animate(withDuration: duration) { [weak self] in
             guard let self = self else { return }
@@ -98,16 +151,22 @@ class PagingTabView: UIView {
         }
     }
     
+    /// 更新cell顏色
     func updateCell(fromIndex: Int, toIndex: Int, progress: CGFloat, withAnimation: Bool = false) {
         let toIndexPath = IndexPath(item: toIndex, section: 0)
-        guard let fromCell = collectionView.cellForItem(at: IndexPath(item: fromIndex, section: 0)) as? TabCollectionViewCell,
-              let toCell = collectionView.cellForItem(at: toIndexPath)as? TabCollectionViewCell else { return }
+        guard let fromCell = collectionView.cellForItem(at: IndexPath(item: fromIndex, section: 0)) as? TabCellProtocol,
+              let toCell = collectionView.cellForItem(at: toIndexPath)as? TabCellProtocol else { return }
         let fromColor = UIColor.interpolate(from: options.selectedTextColor, to: options.textColor, progress: progress)
         let toColor = UIColor.interpolate(from: options.textColor, to: options.selectedTextColor, progress: progress)
+        let fromBgColor = UIColor.interpolate(from: options.itemSelectedBgColor, to: options.itemBgColor, progress: progress)
+        let toBgColor = UIColor.interpolate(from: options.itemBgColor, to: options.itemSelectedBgColor, progress: progress)
+        let fromBorderColor = UIColor.interpolate(from: options.itemSelectedBorderColor, to: options.itemBorderColor, progress: progress)
+        let toBorderColor = UIColor.interpolate(from: options.itemBorderColor, to: options.itemSelectedBorderColor, progress: progress)
         let duration: TimeInterval = withAnimation ? 0.2 : 0.0
-        UIView.animate(withDuration: duration) {
-            fromCell.setTextColor(color: fromColor)
-            toCell.setTextColor(color: toColor)
+        UIView.animate(withDuration: duration) { [weak self] in
+            guard let self = self else { return }
+            fromCell.setTextStyle(backgroundColor: fromBgColor, borderColor: fromBorderColor, textColor: fromColor, font: self.options.textFont)
+            toCell.setTextStyle(backgroundColor: toBgColor, borderColor: toBorderColor, textColor: toColor, font: self.options.selectedTextFont)
         }
         
         collectionView.scrollToItem(at: toIndexPath, at: .centeredHorizontally, animated: true)
@@ -145,5 +204,9 @@ extension PagingTabView: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumInteritemSpacingForSectionAt section: Int) -> CGFloat {
         return options.itemSpacing
     }
-
+    
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        return getItemSize()
+    }
+    
 }
