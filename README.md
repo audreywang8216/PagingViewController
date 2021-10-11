@@ -1,1 +1,1 @@
-# HeaderPagingView
+# PagingViewController
