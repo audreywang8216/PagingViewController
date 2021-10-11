@@ -32,8 +32,28 @@ class ContentListViewController: UIViewController, PagingContainerListProtocol {
         super.viewDidLoad()
         initTableView()
         setupUI()
+        print("index: \(index), \(title ?? "") viewDidLoad")
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        print("index: \(index), \(title ?? "") viewWillAppear")
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        print("index: \(index), \(title ?? "") viewDidAppear")
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        print("index: \(index), \(title ?? "") viewWillDisappear")
+    }
+    
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        print("index: \(index), \(title ?? "") viewDidDisappear")
+    }
     
     private func initTableView() {
         tableView.delegate = self
